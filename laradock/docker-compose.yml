@@ -1,0 +1,308 @@
+version: '2'
+
+services:
+
+### Applications Code Container #############################
+
+    applications:
+      image: tianon/true
+      volumes:
+        - ${APPLICATION}:/var/www
+
+### Workspace Utilities Container ###########################
+
+    workspace:
+      container_name: workspace_
+      build:
+        context: ./workspace
+        args:
+          - INSTALL_XDEBUG=${WORKSPACE_INSTALL_XDEBUG}
+          - INSTALL_BLACKFIRE=${INSTALL_BLACKFIRE}
+          - INSTALL_SOAP=${WORKSPACE_INSTALL_SOAP}
+          - INSTALL_MONGO=${WORKSPACE_INSTALL_MONGO}
+          - INSTALL_PHPREDIS=${WORKSPACE_INSTALL_PHPREDIS}
+          - INSTALL_MSSQL=${WORKSPACE_INSTALL_MSSQL}
+          - INSTALL_NODE=${WORKSPACE_INSTALL_NODE}
+          - INSTALL_YARN=${WORKSPACE_INSTALL_YARN}
+          - INSTALL_DRUSH=${WORKSPACE_INSTALL_DRUSH}
+          - INSTALL_DRUPAL_CONSOLE=${WORKSPACE_INSTALL_DRUPAL_CONSOLE}
+          - INSTALL_AEROSPIKE=${WORKSPACE_INSTALL_AEROSPIKE}
+          - INSTALL_V8JS=${WORKSPACE_INSTALL_V8JS}
+          - COMPOSER_GLOBAL_INSTALL=${WORKSPACE_COMPOSER_GLOBAL_INSTALL}
+          - INSTALL_WORKSPACE_SSH=${WORKSPACE_INSTALL_WORKSPACE_SSH}
+          - INSTALL_LARAVEL_ENVOY=${WORKSPACE_INSTALL_LARAVEL_ENVOY}
+          - INSTALL_LARAVEL_INSTALLER=${WORKSPACE_INSTALL_LARAVEL_INSTALLER}
+          - INSTALL_DEPLOYER=${WORKSPACE_INSTALL_DEPLOYER}
+          - INSTALL_LINUXBREW=${WORKSPACE_INSTALL_LINUXBREW}
+          - INSTALL_MC=${WORKSPACE_INSTALL_MC}
+          - INSTALL_SYMFONY=${WORKSPACE_INSTALL_SYMFONY}
+          - INSTALL_PYTHON=${WORKSPACE_INSTALL_PYTHON}
+          - INSTALL_IMAGE_OPTIMIZERS=${WORKSPACE_INSTALL_IMAGE_OPTIMIZERS}
+          - INSTALL_IMAGEMAGICK=${WORKSPACE_INSTALL_IMAGEMAGICK}
+          - PUID=${WORKSPACE_PUID}
+          - PGID=${WORKSPACE_PGID}
+          - NODE_VERSION=${WORKSPACE_NODE_VERSION}
+          - YARN_VERSION=${WORKSPACE_YARN_VERSION}
+          - TZ=${WORKSPACE_TIMEZONE}
+          - BLACKFIRE_CLIENT_ID=${BLACKFIRE_CLIENT_ID}
+          - BLACKFIRE_CLIENT_TOKEN=${BLACKFIRE_CLIENT_TOKEN}
+        dockerfile: "Dockerfile-${PHP_VERSION}"
+      volumes_from:
+        - applications
+      extra_hosts:
+        - "dockerhost:${DOCKER_HOST_IP}"
+      ports:
+        - "${WORKSPACE_SSH_PORT}:22"
+      tty: true
+      networks:
+        - frontend
+        - backend
+
+### PHP-FPM Container #######################################
+
+    php-fpm:
+      container_name: php_
+      build:
+        context: ./php-fpm
+        args:
+          - INSTALL_XDEBUG=${PHP_FPM_INSTALL_XDEBUG}
+          - INSTALL_BLACKFIRE=${INSTALL_BLACKFIRE}
+          - INSTALL_SOAP=${PHP_FPM_INSTALL_SOAP}
+          - INSTALL_MONGO=${PHP_FPM_INSTALL_MONGO}
+          - INSTALL_MSSQL=${PHP_FPM_INSTALL_MSSQL}
+          - INSTALL_ZIP_ARCHIVE=${PHP_FPM_INSTALL_ZIP_ARCHIVE}
+          - INSTALL_BCMATH=${PHP_FPM_INSTALL_BCMATH}
+          - INSTALL_PHPREDIS=${PHP_FPM_INSTALL_PHPREDIS}
+          - INSTALL_MEMCACHED=${PHP_FPM_INSTALL_MEMCACHED}
+          - INSTALL_OPCACHE=${PHP_FPM_INSTALL_OPCACHE}
+          - INSTALL_EXIF=${PHP_FPM_INSTALL_EXIF}
+          - INSTALL_AEROSPIKE=${PHP_FPM_INSTALL_AEROSPIKE}
+          - INSTALL_MYSQLI=${PHP_FPM_INSTALL_MYSQLI}
+          - INSTALL_TOKENIZER=${PHP_FPM_INSTALL_TOKENIZER}
+          - INSTALL_INTL=${PHP_FPM_INSTALL_INTL}
+          - INSTALL_GHOSTSCRIPT=${PHP_FPM_INSTALL_GHOSTSCRIPT}
+          - INSTALL_LDAP=${PHP_FPM_INSTALL_LDAP}
+          - INSTALL_SWOOLE=${PHP_FPM_INSTALL_SWOOLE}
+          - INSTALL_IMAGE_OPTIMIZERS=${PHP_FPM_INSTALL_IMAGE_OPTIMIZERS}
+          - INSTALL_IMAGEMAGICK=${PHP_FPM_INSTALL_IMAGEMAGICK}
+        dockerfile: "Dockerfile-${PHP_VERSION}"
+      volumes_from:
+        - applications
+      volumes:
+        - ./php-fpm/php${PHP_VERSION}.ini:/usr/local/etc/php/php.ini
+      expose:
+        - "9000"
+      depends_on:
+        - workspace
+      extra_hosts:
+        - "dockerhost:${DOCKER_HOST_IP}"
+      environment:
+        - PHP_IDE_CONFIG=${PHP_IDE_CONFIG}
+      networks:
+        - backend
+
+### PHP Worker Container #####################################
+
+    # php-worker:
+    #   build:
+    #     context: ./php-worker
+    #     dockerfile: "Dockerfile-${PHP_VERSION}"
+    #   volumes_from:
+    #     - applications
+    #   depends_on:
+    #     - workspace
+    #   extra_hosts:
+    #     - "dockerhost:${DOCKER_HOST_IP}"
+    #   networks:
+    #     - backend
+
+### NGINX Server Container ##################################
+
+    nginx:
+      container_name: nginx_
+      build:
+        context: ./nginx
+        args:
+          - PHP_UPSTREAM_CONTAINER=${NGINX_PHP_UPSTREAM_CONTAINER}
+          - PHP_UPSTREAM_PORT=${NGINX_PHP_UPSTREAM_PORT}
+      volumes_from:
+        - applications
+      volumes:
+        - ${NGINX_HOST_LOG_PATH}:/var/log/nginx
+        - ${NGINX_SITES_PATH}:/etc/nginx/sites-available
+      ports:
+        - "${NGINX_HOST_HTTP_PORT}:80"
+        - "${NGINX_HOST_HTTPS_PORT}:443"
+      depends_on:
+        - php-fpm
+      networks:
+        - frontend
+        - backend
+
+
+### MariaDB Container #######################################
+
+    # mariadb:
+    #   restart: always
+    #   container_name: mariadb_
+    #   build: ./mariadb
+    #   volumes:
+    #     - ${DATA_SAVE_PATH}/mariadb:/var/lib/mysql
+    #     - ${MARIADB_ENTRYPOINT_INITDB}:/docker-entrypoint-initdb.d
+    #   ports:
+    #     - "${MARIADB_PORT}:3306"
+    #   environment:
+    #     - MYSQL_DATABASE=${MARIADB_DATABASE}
+    #     - MYSQL_USER=${MARIADB_USER}
+    #     - MYSQL_PASSWORD=${MARIADB_PASSWORD}
+    #     - MYSQL_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD}
+    #   networks:
+    #     - backend
+
+    # mariadb:
+    #   restart: always
+    #   image: webhippie/mariadb:latest
+    #   container_name: mariadb_
+    #   expose:
+    #     - "3306"
+    #   ports:
+    #     - "3306:3306"
+    #   volumes:
+    #     - ${DATA_SAVE_PATH}/mariadb/data:/var/lib/mysql
+    #     - ${DATA_SAVE_PATH}/mariadb/backup:/var/lib/backup
+    #   environment:
+    #     - MARIADB_DATABASE=${MARIADB_DATABASE}
+    #     - MARIADB_USERNAME=${MARIADB_USER}
+    #     - MARIADB_PASSWORD=${MARIADB_PASSWORD}
+    #     - MARIADB_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD}
+    #   networks:
+    #     - backend
+
+    postgres:
+      restart: always
+      image: postgres:alpine
+      container_name: postgres_
+      expose:
+        - "5432"
+      ports:
+        - "5432:5432"
+      environment:
+        - POSTGRES_DB=${POSTGRES_DB}
+        - POSTGRES_USER=${POSTGRES_USER}
+        - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+        - POSTGRES_PORT=${POSTGRES_PORT}
+      volumes:
+        - ${DATA_SAVE_PATH}/pgdata:/var/lib/postgresql/apiato
+      networks:
+        - backend
+
+### Redis Container #########################################
+
+    redis:
+      build: ./redis
+      volumes:
+        - ${DATA_SAVE_PATH}/redis:/data
+      ports:
+        - "${REDIS_PORT}:6379"
+      networks:
+        - backend
+
+### Aerospike c Container ###################################
+
+    # aerospike:
+    #   build: ./aerospike
+    #   volumes_from:
+    #     - workspace
+    #   volumes:
+    #     - ${DATA_SAVE_PATH}/aerospike:/opt/aerospike/data
+    #   ports:
+    #     - "${AEROSPIKE_SERVICE_PORT}:3000"
+    #     - "${AEROSPIKE_FABRIC_PORT}:3001"
+    #     - "${AEROSPIKE_HEARTBEAT_PORT}:3002"
+    #     - "${AEROSPIKE_INFO_PORT}:3003"
+    #   networks:
+    #     - backend
+
+### Beanstalkd Container ####################################
+
+    # beanstalkd:
+    #   build: ./beanstalkd
+    #   ports:
+    #     - "${BEANSTALKD_HOST_PORT}:11300"
+    #   privileged: true
+    #   depends_on:
+    #     - php-fpm
+    #   networks:
+    #     - backend
+
+
+### Beanstalkd Console Container ############################
+
+    # beanstalkd-console:
+    #   build: ./beanstalkd-console
+    #   ports:
+    #     - "2080:2080"
+    #   depends_on:
+    #     - beanstalkd
+    #   networks:
+    #     - backend
+
+### Mailhog Container #########################################
+
+    # mailhog:
+    #   build: ./mailhog
+    #   ports:
+    #     - "1025:1025"
+    #     - "8025:8025"
+    #   networks:
+    #     - frontend
+    #     - backend
+
+### Jenkins ###################################################
+
+    # jenkins:
+    #   build: ./jenkins
+    #   environment:
+    #     JAVA_OPTS: "-Djava.awt.headless=true"
+    #   ports:
+    #     - "${JENKINS_HOST_SLAVE_AGENT_PORT}:50000"
+    #     - "${JENKINS_HOST_HTTP_PORT}:8080"
+    #   privileged: true
+    #   volumes:
+    #     - ${JENKINS_HOME}:/var/jenkins_home
+    #     - /var/run/docker.sock:/var/run/docker.sock
+    #   networks:
+    #     - frontend
+    #     - backend
+
+### Laravel Echo Server #######################################
+    # laravel-echo-server:
+    #   build:
+    #     context: ./laravel-echo-server
+    #   volumes:
+    #     - ./laravel-echo-server/laravel-echo-server.json:/app/laravel-echo-server.json:ro
+    #   ports:
+    #     - "${LARAVEL_ECHO_SERVER_PORT}:6001"
+    #   links:
+    #     - redis
+    #   networks:
+    #     - frontend
+    #     - backend
+
+### Networks Setup ############################################
+
+networks:
+  frontend:
+    driver: "bridge"
+  backend:
+    driver: "bridge"
+
+### Volumes Setup #############################################
+
+volumes:
+  redis:
+    driver: "local"
+  postgres:
+    driver: "local"
+  # aerospike:
+  #   driver: "local"

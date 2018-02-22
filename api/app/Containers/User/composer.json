@@ -1,0 +1,8 @@
+{
+  "name": "apiato/user",
+  "description": "apiato Container for apiato.",
+  "type": "apiato-container",
+  "require": {
+
+  }
+}
